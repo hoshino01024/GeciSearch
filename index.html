@@ -375,176 +375,164 @@
         </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const songInput = document.getElementById('songInput');
-            const searchBtn = document.getElementById('searchBtn');
-            const downloadBtn = document.getElementById('downloadBtn');
-            const placeholder = document.getElementById('placeholder');
-            const loading = document.getElementById('loading');
-            const lyricsDisplay = document.getElementById('lyricsDisplay');
-            const lyricsContent = document.getElementById('lyricsContent');
-            const songTitle = document.getElementById('songTitle');
-            const historyList = document.getElementById('historyList');
-            const searchCount = document.getElementById('searchCount');
-            
-            let count = 0;
-            let currentSong = '';
-            let currentLyrics = '';
-            
-            // 初始化历史记录
-            let searchHistory = JSON.parse(localStorage.getItem('lyricSearchHistory')) || [];
-            updateHistoryList();
-            
-            searchBtn.addEventListener('click', searchLyrics);
-            downloadBtn.addEventListener('click', downloadLyrics);
-            
-            // 按Enter键搜索
-            songInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    searchLyrics();
-                }
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const songInput = document.getElementById('songInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const placeholder = document.getElementById('placeholder');
+    const loading = document.getElementById('loading');
+    const lyricsDisplay = document.getElementById('lyricsDisplay');
+    const lyricsContent = document.getElementById('lyricsContent');
+    const songTitle = document.getElementById('songTitle');
+    const historyList = document.getElementById('historyList');
+    const searchCount = document.getElementById('searchCount');
+
+    let count = 0;
+    let currentSong = '';
+    let currentLyrics = '';
+
+    // 初始化历史记录
+    let searchHistory = JSON.parse(localStorage.getItem('lyricSearchHistory')) || [];
+    updateHistoryList();
+
+    searchBtn.addEventListener('click', searchLyrics);
+    downloadBtn.addEventListener('click', downloadLyrics);
+
+    songInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchLyrics();
+        }
+    });
+
+    async function searchLyrics() {
+        const songName = songInput.value.trim();
+        if (!songName) {
+            alert('请输入歌名');
+            return;
+        }
+
+        placeholder.style.display = 'none';
+        lyricsDisplay.style.display = 'none';
+        loading.style.display = 'block';
+        searchBtn.disabled = true;
+        downloadBtn.disabled = true;
+
+        try {
+            // 使用免费CORS代理
+            const apiUrl = `https://api.52vmy.cn/api/music/lrc?msg=${encodeURIComponent(songName)}&n=1`;
+            const proxyUrl = 'https://api.allorigins.win/get?url=';
+            const response = await fetch(proxyUrl + encodeURIComponent(apiUrl));
+
+            if (!response.ok) {
+                throw new Error(`API请求失败，状态码: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const lyrics = data.contents; // allorigins返回的数据在contents字段里
+
+            if (!lyrics) {
+                throw new Error('未找到相关歌词');
+            }
+
+            currentSong = songName;
+            currentLyrics = lyrics;
+            songTitle.textContent = `${songName} - 歌词`;
+            lyricsContent.textContent = lyrics;
+
+            addToHistory(songName, lyrics);
+
+            count++;
+            searchCount.textContent = count;
+
+            setTimeout(() => {
+                loading.style.display = 'none';
+                lyricsDisplay.style.display = 'block';
+                downloadBtn.disabled = false;
+                searchBtn.disabled = false;
+            }, 800);
+
+        } catch (error) {
+            console.error('获取歌词时出错:', error);
+            loading.style.display = 'none';
+            placeholder.style.display = 'block';
+            placeholder.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
+                                     <h3>获取歌词失败</h3>
+                                     <p>${error.message}</p>
+                                     <p>请尝试其他歌名</p>`;
+            searchBtn.disabled = false;
+            downloadBtn.disabled = true;
+        }
+    }
+
+    function downloadLyrics() {
+        if (!currentLyrics) {
+            alert('没有可下载的歌词内容');
+            return;
+        }
+
+        const blob = new Blob([currentLyrics], { type: 'text/plain;charset=utf-8' });
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = `${currentSong}.lrc`;
+
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+
+        alert(`歌词已保存为: ${currentSong}.lrc\n已保存到Download/geci文件夹`);
+    }
+
+    function addToHistory(song, lyrics) {
+        const historyItem = {
+            song: song,
+            lyrics: lyrics.substring(0, 100) + (lyrics.length > 100 ? '...' : ''),
+            timestamp: new Date().toLocaleString()
+        };
+
+        const existingIndex = searchHistory.findIndex(item => item.song === song);
+        if (existingIndex !== -1) {
+            searchHistory.splice(existingIndex, 1);
+        }
+
+        searchHistory.unshift(historyItem);
+
+        if (searchHistory.length > 5) {
+            searchHistory.pop();
+        }
+
+        localStorage.setItem('lyricSearchHistory', JSON.stringify(searchHistory));
+
+        updateHistoryList();
+    }
+
+    function updateHistoryList() {
+        historyList.innerHTML = '';
+
+        if (searchHistory.length === 0) {
+            historyList.innerHTML = '<div class="placeholder" style="text-align:center;padding:20px;color:#6c757d;">暂无搜索历史</div>';
+            return;
+        }
+
+        searchHistory.forEach(item => {
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            historyItem.innerHTML = `
+                <div class="history-item-title">${item.song}</div>
+                <div class="history-item-content">${item.lyrics}</div>
+                <div class="history-item-time">${item.timestamp}</div>
+            `;
+
+            historyItem.addEventListener('click', function() {
+                songInput.value = item.song;
+                searchLyrics();
             });
-            
-            async function searchLyrics() {
-                const songName = songInput.value.trim();
-                if (!songName) {
-                    alert('请输入歌名');
-                    return;
-                }
-                
-                // 显示加载状态
-                placeholder.style.display = 'none';
-                lyricsDisplay.style.display = 'none';
-                loading.style.display = 'block';
-                searchBtn.disabled = true;
-                downloadBtn.disabled = true;
-                
-                try {
-                    // 调用API
-                    const apiUrl = `https://api.52vmy.cn/api/music/lrc?msg=${encodeURIComponent(songName)}&n=1`;
-                    const response = await fetch(apiUrl);
-                    
-                    if (!response.ok) {
-                        throw new Error(`API请求失败，状态码: ${response.status}`);
-                    }
-                    
-                    const lyrics = await response.text();
-                    
-                    if (!lyrics) {
-                        throw new Error('未找到相关歌词');
-                    }
-                    
-                    // 显示歌词
-                    currentSong = songName;
-                    currentLyrics = lyrics;
-                    songTitle.textContent = `${songName} - 歌词`;
-                    lyricsContent.textContent = lyrics;
-                    
-                    // 添加到历史记录
-                    addToHistory(songName, lyrics);
-                    
-                    // 更新计数器
-                    count++;
-                    searchCount.textContent = count;
-                    
-                    // 显示歌词
-                    setTimeout(() => {
-                        loading.style.display = 'none';
-                        lyricsDisplay.style.display = 'block';
-                        downloadBtn.disabled = false;
-                        searchBtn.disabled = false;
-                    }, 800);
-                } catch (error) {
-                    console.error('获取歌词时出错:', error);
-                    loading.style.display = 'none';
-                    placeholder.style.display = 'block';
-                    placeholder.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
-                                             <h3>获取歌词失败</h3>
-                                             <p>${error.message}</p>
-                                             <p>请尝试其他歌名</p>`;
-                    searchBtn.disabled = false;
-                    downloadBtn.disabled = true;
-                }
-            }
-            
-            function downloadLyrics() {
-                if (!currentLyrics) {
-                    alert('没有可下载的歌词内容');
-                    return;
-                }
-                
-                // 创建Blob对象
-                const blob = new Blob([currentLyrics], { type: 'text/plain;charset=utf-8' });
-                
-                // 创建下载链接
-                const downloadLink = document.createElement('a');
-                downloadLink.href = URL.createObjectURL(blob);
-                downloadLink.download = `${currentSong}.lrc`;
-                
-                // 模拟点击下载
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
-                
-                // 显示成功消息
-                alert(`歌词已保存为: ${currentSong}.lrc\n已保存到Download/geci文件夹`);
-            }
-            
-            function addToHistory(song, lyrics) {
-                // 添加到历史记录数组
-                const historyItem = {
-                    song: song,
-                    lyrics: lyrics.substring(0, 100) + (lyrics.length > 100 ? '...' : ''),
-                    timestamp: new Date().toLocaleString()
-                };
-                
-                // 避免重复添加
-                const existingIndex = searchHistory.findIndex(item => item.song === song);
-                if (existingIndex !== -1) {
-                    searchHistory.splice(existingIndex, 1);
-                }
-                
-                searchHistory.unshift(historyItem);
-                
-                // 限制历史记录数量
-                if (searchHistory.length > 5) {
-                    searchHistory.pop();
-                }
-                
-                // 保存到localStorage
-                localStorage.setItem('lyricSearchHistory', JSON.stringify(searchHistory));
-                
-                // 更新历史记录列表
-                updateHistoryList();
-            }
-            
-            function updateHistoryList() {
-                historyList.innerHTML = '';
-                
-                if (searchHistory.length === 0) {
-                    historyList.innerHTML = '<div class="placeholder" style="text-align:center;padding:20px;color:#6c757d;">暂无搜索历史</div>';
-                    return;
-                }
-                
-                searchHistory.forEach(item => {
-                    const historyItem = document.createElement('div');
-                    historyItem.className = 'history-item';
-                    historyItem.innerHTML = `
-                        <div class="history-item-title">${item.song}</div>
-                        <div class="history-item-content">${item.lyrics}</div>
-                        <div class="history-item-time">${item.timestamp}</div>
-                    `;
-                    
-                    historyItem.addEventListener('click', function() {
-                        songInput.value = item.song;
-                        searchLyrics();
-                    });
-                    
-                    historyList.appendChild(historyItem);
-                });
-            }
+
+            historyList.appendChild(historyItem);
         });
-    </script>
+    }
+});
+</script>
+
 </body>
 </html>
